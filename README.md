@@ -2,7 +2,7 @@
 
 Convertisseur image vers JPG pour Windows. Clic droit sur le fichier, **Convertir en JPG**, voilà.
 
-Formats supportés en entrée : **HEIC, HEIF, PNG, WebP, TIFF, BMP, GIF**.
+Formats supportés en entrée : **HEIC, HEIF, PNG, WebP, TIFF, BMP, GIF, AVIF**.
 
 Pensé pour les cas concrets du quotidien :
 - Les HEIC d'iPhone qui ne s'ouvrent nulle part sans payer une extension à Microsoft.
@@ -29,7 +29,7 @@ En attendant, build from source (section ci-dessous).
 
 ### Depuis l'explorateur Windows
 
-Clic droit sur un fichier `.heic`, `.heif`, `.png`, `.webp`, `.tif`, `.bmp` ou `.gif` → **Convertir en JPG** → un `.jpg` apparaît à côté.
+Clic droit sur un fichier `.heic`, `.heif`, `.png`, `.webp`, `.tif`, `.bmp`, `.gif` ou `.avif` → **Convertir en JPG** → un `.jpg` apparaît à côté.
 
 ### Depuis la ligne de commande
 
@@ -57,23 +57,24 @@ Options :
 
 ### Prérequis
 
-- [Rust stable](https://rustup.rs/) (1.75+)
-- [vcpkg](https://github.com/microsoft/vcpkg) pour `libheif`
+- [Rust stable](https://rustup.rs/) (1.79+)
+- [vcpkg](https://github.com/microsoft/vcpkg) pour `libheif` et `dav1d`
+- `pkg-config` (via scoop : `scoop install pkg-config`)
 
 ```powershell
 # vcpkg (une fois)
 git clone https://github.com/microsoft/vcpkg C:\vcpkg
 C:\vcpkg\bootstrap-vcpkg.bat
 
-# libheif (x64)
-C:\vcpkg\vcpkg install libheif:x64-windows-static
+# Libs natives (x64 dynamiques)
+C:\vcpkg\vcpkg install libheif:x64-windows dav1d:x64-windows
 ```
 
 ### Build
 
 ```powershell
-$env:VCPKGRS_TRIPLET = "x64-windows-static"
 $env:VCPKG_ROOT = "C:\vcpkg"
+$env:PKG_CONFIG_PATH = "C:\vcpkg\installed\x64-windows\lib\pkgconfig"
 cargo build --release
 ```
 

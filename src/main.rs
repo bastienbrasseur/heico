@@ -170,9 +170,8 @@ fn convert_one(
         .map(|s| s.to_ascii_lowercase());
     let decoded = match ext.as_deref() {
         Some("heic") | Some("heif") => decode_heic(src, quality)?,
-        Some("png") | Some("webp") | Some("tif") | Some("tiff") | Some("bmp") | Some("gif") => {
-            decode_with_image_crate(src, quality)?
-        }
+        Some("png") | Some("webp") | Some("tif") | Some("tiff") | Some("bmp") | Some("gif")
+        | Some("avif") => decode_with_image_crate(src, quality)?,
         Some(other) => return Err(anyhow!("format non supporté : .{other}")),
         None => return Err(anyhow!("extension manquante")),
     };

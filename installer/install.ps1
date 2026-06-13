@@ -27,20 +27,19 @@ Copy-Item $exeSource $exeDest -Force
 Write-Host "Copie : $exeDest" -ForegroundColor Green
 
 # Copie les DLL natives (heif.dll, libde265.dll, libx265.dll) depuis vcpkg ou a cote du binaire.
-$dllCandidates = @(
-    (Join-Path (Split-Path -Parent $exeSource) "heif.dll"),
-    (Join-Path (Split-Path -Parent $exeSource) "libde265.dll"),
-    (Join-Path (Split-Path -Parent $exeSource) "libx265.dll")
-)
+$dllNames = @("heif.dll", "libde265.dll", "libx265.dll", "dav1d.dll")
+
+$dllCandidates = @()
+foreach ($name in $dllNames) {
+    $dllCandidates += (Join-Path (Split-Path -Parent $exeSource) $name)
+}
 
 if ($env:VCPKG_ROOT) {
     $vcpkgBin = Join-Path $env:VCPKG_ROOT "installed\x64-windows\bin"
     if (Test-Path $vcpkgBin) {
-        $dllCandidates += @(
-            (Join-Path $vcpkgBin "heif.dll"),
-            (Join-Path $vcpkgBin "libde265.dll"),
-            (Join-Path $vcpkgBin "libx265.dll")
-        )
+        foreach ($name in $dllNames) {
+            $dllCandidates += (Join-Path $vcpkgBin $name)
+        }
     }
 }
 
@@ -60,7 +59,8 @@ $supportedExts = @(
     ".webp", ".WEBP",
     ".tif", ".TIF", ".tiff", ".TIFF",
     ".bmp", ".BMP",
-    ".gif", ".GIF"
+    ".gif", ".GIF",
+    ".avif", ".AVIF"
 )
 foreach ($ext in $supportedExts) {
     $keyBase = "HKCU:\Software\Classes\SystemFileAssociations\$ext\shell\HeicoConvertToJpg"
@@ -75,5 +75,5 @@ foreach ($ext in $supportedExts) {
 
 Write-Host ""
 Write-Host "Installation terminee." -ForegroundColor Green
-Write-Host "Clic droit sur un .heic / .heif / .png / .webp / .tif / .bmp / .gif pour utiliser." -ForegroundColor Cyan
+Write-Host "Clic droit sur un .heic / .heif / .png / .webp / .tif / .bmp / .gif / .avif pour utiliser." -ForegroundColor Cyan
 Write-Host "(Si tu ne le vois pas, essaie 'Afficher plus d'options'.)" -ForegroundColor DarkGray

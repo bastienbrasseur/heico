@@ -10,7 +10,8 @@ $supportedExts = @(
     ".webp", ".WEBP",
     ".tif", ".TIF", ".tiff", ".TIFF",
     ".bmp", ".BMP",
-    ".gif", ".GIF"
+    ".gif", ".GIF",
+    ".avif", ".AVIF"
 )
 foreach ($ext in $supportedExts) {
     $keyBase = "HKCU:\Software\Classes\SystemFileAssociations\$ext\shell\HeicoConvertToJpg"
