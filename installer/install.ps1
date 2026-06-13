@@ -26,10 +26,31 @@ if (-not (Test-Path $installDir)) {
 Copy-Item $exeSource $exeDest -Force
 Write-Host "Copie : $exeDest" -ForegroundColor Green
 
-# Copie les DLL natives a cote si presentes (libheif, libde265, etc.)
-Get-ChildItem (Split-Path -Parent $exeSource) -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object {
-    Copy-Item $_.FullName (Join-Path $installDir $_.Name) -Force
-    Write-Host "  + $($_.Name)" -ForegroundColor DarkGray
+# Copie les DLL natives (heif.dll, libde265.dll, libx265.dll) depuis vcpkg ou a cote du binaire.
+$dllCandidates = @(
+    (Join-Path (Split-Path -Parent $exeSource) "heif.dll"),
+    (Join-Path (Split-Path -Parent $exeSource) "libde265.dll"),
+    (Join-Path (Split-Path -Parent $exeSource) "libx265.dll")
+)
+
+if ($env:VCPKG_ROOT) {
+    $vcpkgBin = Join-Path $env:VCPKG_ROOT "installed\x64-windows\bin"
+    if (Test-Path $vcpkgBin) {
+        $dllCandidates += @(
+            (Join-Path $vcpkgBin "heif.dll"),
+            (Join-Path $vcpkgBin "libde265.dll"),
+            (Join-Path $vcpkgBin "libx265.dll")
+        )
+    }
+}
+
+$copiedDlls = @{}
+foreach ($dll in $dllCandidates) {
+    if ((Test-Path $dll) -and -not $copiedDlls.ContainsKey((Split-Path -Leaf $dll))) {
+        Copy-Item $dll (Join-Path $installDir (Split-Path -Leaf $dll)) -Force
+        Write-Host "  + $(Split-Path -Leaf $dll)" -ForegroundColor DarkGray
+        $copiedDlls[(Split-Path -Leaf $dll)] = $true
+    }
 }
 
 # Cle registre pour .heic et .HEIC (Windows traite les deux separement parfois)

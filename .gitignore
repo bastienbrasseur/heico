@@ -16,8 +16,8 @@ Thumbs.db
 .env
 .env.local
 
-# Claude Code local config (par machine)
-.claude/settings.local.json
+# Claude Code local state (par machine)
+.claude/
 
 # Test fixtures lourdes
 /samples

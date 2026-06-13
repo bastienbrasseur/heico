@@ -216,7 +216,7 @@ fn decode_heic_to_jpeg(src: &Path, quality: u8) -> Result<Vec<u8>> {
 }
 
 fn extract_exif(src: &Path) -> Result<Option<Vec<u8>>> {
-    use libheif_rs::HeifContext;
+    use libheif_rs::{HeifContext, ItemId};
 
     let ctx = HeifContext::read_from_file(
         src.to_str()
@@ -224,8 +224,13 @@ fn extract_exif(src: &Path) -> Result<Option<Vec<u8>>> {
     )?;
     let handle = ctx.primary_image_handle()?;
 
-    let mut ids = vec![0u32; handle.number_of_metadata_blocks("Exif")];
-    handle.metadata_block_ids(&mut ids, "Exif");
+    let exif_tag = b"Exif";
+    let count = handle.number_of_metadata_blocks(exif_tag);
+    if count <= 0 {
+        return Ok(None);
+    }
+    let mut ids: Vec<ItemId> = vec![0; count as usize];
+    handle.metadata_block_ids(&mut ids, exif_tag);
     let Some(&id) = ids.first() else {
         return Ok(None);
     };
