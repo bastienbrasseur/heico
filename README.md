@@ -80,4 +80,4 @@ Retire la clé registre du menu contextuel et supprime `%LOCALAPPDATA%\Heico\`.
 
 ## Licence
 
-MIT — voir [LICENSE](LICENSE).
+MIT, voir [LICENSE](LICENSE).

@@ -66,7 +66,13 @@ fn main() {
     let failed = AtomicUsize::new(0);
 
     cli.files.par_iter().for_each(|src| {
-        let result = convert_one(src, cli.output.as_deref(), cli.quality, cli.force, !cli.no_exif);
+        let result = convert_one(
+            src,
+            cli.output.as_deref(),
+            cli.quality,
+            cli.force,
+            !cli.no_exif,
+        );
         match result {
             Ok(ConvertOutcome::Converted(dst)) => {
                 success.fetch_add(1, Ordering::Relaxed);
@@ -83,7 +89,10 @@ fn main() {
                     pb.set_message(format!("SKIP {}", dst.display()));
                     pb.inc(1);
                 } else {
-                    eprintln!("Ignoré (existe déjà) : {} — utilise --force pour écraser.", dst.display());
+                    eprintln!(
+                        "Ignoré (existe déjà) : {}. Utilise --force pour écraser.",
+                        dst.display()
+                    );
                 }
             }
             Err(e) => {
@@ -177,7 +186,9 @@ fn decode_heic_to_jpeg(src: &Path, quality: u8) -> Result<Vec<u8>> {
             .ok_or_else(|| anyhow!("chemin non-UTF8 : {}", src.display()))?,
     )
     .with_context(|| "ouverture HEIC")?;
-    let handle = ctx.primary_image_handle().with_context(|| "image primaire")?;
+    let handle = ctx
+        .primary_image_handle()
+        .with_context(|| "image primaire")?;
 
     let img = lib
         .decode(&handle, ColorSpace::Rgb(RgbChroma::Rgb), None)
@@ -218,10 +229,7 @@ fn decode_heic_to_jpeg(src: &Path, quality: u8) -> Result<Vec<u8>> {
 fn extract_exif(src: &Path) -> Result<Option<Vec<u8>>> {
     use libheif_rs::{HeifContext, ItemId};
 
-    let ctx = HeifContext::read_from_file(
-        src.to_str()
-            .ok_or_else(|| anyhow!("chemin non-UTF8"))?,
-    )?;
+    let ctx = HeifContext::read_from_file(src.to_str().ok_or_else(|| anyhow!("chemin non-UTF8"))?)?;
     let handle = ctx.primary_image_handle()?;
 
     let exif_tag = b"Exif";
