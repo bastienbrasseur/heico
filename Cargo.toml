@@ -16,7 +16,7 @@ path = "src/main.rs"
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 libheif-rs = "1.0"
-image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "tiff", "bmp", "gif"] }
 img-parts = "0.3"
 rayon = "1.10"
 indicatif = "0.17"

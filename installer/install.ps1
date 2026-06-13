@@ -54,7 +54,15 @@ foreach ($dll in $dllCandidates) {
 }
 
 # Cle registre pour .heic / .heif / .png (Windows traite parfois les casses separement)
-foreach ($ext in @(".heic", ".HEIC", ".heif", ".HEIF", ".png", ".PNG")) {
+$supportedExts = @(
+    ".heic", ".HEIC", ".heif", ".HEIF",
+    ".png", ".PNG",
+    ".webp", ".WEBP",
+    ".tif", ".TIF", ".tiff", ".TIFF",
+    ".bmp", ".BMP",
+    ".gif", ".GIF"
+)
+foreach ($ext in $supportedExts) {
     $keyBase = "HKCU:\Software\Classes\SystemFileAssociations\$ext\shell\HeicoConvertToJpg"
     New-Item -Path $keyBase -Force | Out-Null
     Set-ItemProperty -Path $keyBase -Name "(Default)" -Value "Convertir en JPG"
@@ -67,5 +75,5 @@ foreach ($ext in @(".heic", ".HEIC", ".heif", ".HEIF", ".png", ".PNG")) {
 
 Write-Host ""
 Write-Host "Installation terminee." -ForegroundColor Green
-Write-Host "Clic droit sur un .heic / .heif / .png pour utiliser." -ForegroundColor Cyan
+Write-Host "Clic droit sur un .heic / .heif / .png / .webp / .tif / .bmp / .gif pour utiliser." -ForegroundColor Cyan
 Write-Host "(Si tu ne le vois pas, essaie 'Afficher plus d'options'.)" -ForegroundColor DarkGray

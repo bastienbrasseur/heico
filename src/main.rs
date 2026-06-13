@@ -170,7 +170,9 @@ fn convert_one(
         .map(|s| s.to_ascii_lowercase());
     let decoded = match ext.as_deref() {
         Some("heic") | Some("heif") => decode_heic(src, quality)?,
-        Some("png") => decode_png(src, quality)?,
+        Some("png") | Some("webp") | Some("tif") | Some("tiff") | Some("bmp") | Some("gif") => {
+            decode_with_image_crate(src, quality)?
+        }
         Some(other) => return Err(anyhow!("format non supporté : .{other}")),
         None => return Err(anyhow!("extension manquante")),
     };
@@ -304,21 +306,30 @@ fn decode_heic(src: &Path, quality: u8) -> Result<DecodedSrc> {
     })
 }
 
-fn decode_png(src: &Path, quality: u8) -> Result<DecodedSrc> {
-    use image::codecs::jpeg::JpegEncoder;
-    use image::codecs::png::PngDecoder;
-    use image::{ColorType, DynamicImage, ImageDecoder};
-    use std::io::BufReader;
+fn decode_with_image_crate(src: &Path, quality: u8) -> Result<DecodedSrc> {
+    use image::{DynamicImage, ImageDecoder, ImageReader};
 
-    let file = std::fs::File::open(src).with_context(|| "ouverture PNG")?;
-    let mut decoder = PngDecoder::new(BufReader::new(file)).with_context(|| "décodage PNG")?;
-
+    let reader = ImageReader::open(src)
+        .with_context(|| "ouverture image")?
+        .with_guessed_format()
+        .with_context(|| "détection format")?;
+    let mut decoder = reader.into_decoder().with_context(|| "init décodeur")?;
     let icc_profile = decoder.icc_profile().ok().flatten();
+    let img = DynamicImage::from_decoder(decoder).with_context(|| "lecture pixels")?;
+    finalize_decoded_image(img, quality, icc_profile)
+}
 
-    let img = DynamicImage::from_decoder(decoder).with_context(|| "lecture pixels PNG")?;
+fn finalize_decoded_image(
+    img: image::DynamicImage,
+    quality: u8,
+    icc_profile: Option<Vec<u8>>,
+) -> Result<DecodedSrc> {
+    use image::codecs::jpeg::JpegEncoder;
+    use image::{ColorType, DynamicImage};
+
     let (width, height) = (img.width(), img.height());
 
-    // JPG ne supporte pas la transparence : composite RGBA sur fond blanc.
+    // JPG ne supporte pas la transparence : composite RGBA / LumaA sur fond blanc.
     let rgb_bytes: Vec<u8> = match img {
         DynamicImage::ImageRgb8(buf) => buf.into_raw(),
         DynamicImage::ImageRgba8(buf) => composite_rgba_on_white(buf.as_raw(), width, height),
@@ -330,8 +341,8 @@ fn decode_png(src: &Path, quality: u8) -> Result<DecodedSrc> {
             out
         }
         DynamicImage::ImageLumaA8(buf) => {
-            let mut out = Vec::with_capacity((buf.len() / 2) * 3);
             let raw = buf.into_raw();
+            let mut out = Vec::with_capacity((raw.len() / 2) * 3);
             for chunk in raw.chunks_exact(2) {
                 let (l, a) = (chunk[0] as u16, chunk[1] as u16);
                 let inv = 255 - a;
