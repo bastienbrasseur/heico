@@ -34,7 +34,7 @@ struct Cli {
     files: Vec<PathBuf>,
 
     /// Qualité JPG (1-100).
-    #[arg(short, long, default_value_t = 92)]
+    #[arg(short, long, default_value_t = 88)]
     quality: u8,
 
     /// Dossier de sortie. Par défaut, même dossier que le fichier source.
@@ -164,26 +164,32 @@ fn convert_one(
         return Ok(ConvertOutcome::Skipped(dst));
     }
 
-    let jpg_bytes = decode_heic_to_jpeg(src, quality)?;
+    let decoded = decode_heic(src, quality)?;
 
-    let final_bytes = if keep_exif {
-        match extract_exif(src) {
-            Ok(Some(mut exif)) => {
-                // libheif a deja applique la rotation EXIF sur les pixels au decodage,
-                // donc on neutralise le tag Orientation pour eviter qu'un viewer JPG
-                // ne rotate une seconde fois.
-                neutralize_exif_orientation(&mut exif);
-                inject_exif_into_jpeg(&jpg_bytes, &exif).unwrap_or(jpg_bytes)
-            }
-            _ => jpg_bytes,
-        }
+    let exif = if keep_exif {
+        decoded.exif.map(|mut e| {
+            // libheif a deja applique la rotation EXIF sur les pixels au decodage,
+            // donc on neutralise le tag Orientation pour eviter qu'un viewer JPG
+            // ne rotate une seconde fois.
+            neutralize_exif_orientation(&mut e);
+            e
+        })
     } else {
-        jpg_bytes
+        None
     };
+
+    let final_bytes = finalize_jpeg(&decoded.jpeg_bytes, decoded.icc_profile.as_deref(), exif.as_deref())
+        .unwrap_or(decoded.jpeg_bytes);
 
     std::fs::write(&dst, final_bytes).with_context(|| format!("écriture de {}", dst.display()))?;
 
     Ok(ConvertOutcome::Converted(dst))
+}
+
+struct DecodedHeic {
+    jpeg_bytes: Vec<u8>,
+    icc_profile: Option<Vec<u8>>,
+    exif: Option<Vec<u8>>,
 }
 
 fn compute_destination(src: &Path, output_dir: Option<&Path>) -> Result<PathBuf> {
@@ -202,9 +208,9 @@ fn compute_destination(src: &Path, output_dir: Option<&Path>) -> Result<PathBuf>
     Ok(dst)
 }
 
-fn decode_heic_to_jpeg(src: &Path, quality: u8) -> Result<Vec<u8>> {
+fn decode_heic(src: &Path, quality: u8) -> Result<DecodedHeic> {
     use image::{codecs::jpeg::JpegEncoder, ColorType};
-    use libheif_rs::{ColorSpace, HeifContext, LibHeif, RgbChroma};
+    use libheif_rs::{ColorSpace, HeifContext, ItemId, LibHeif, RgbChroma};
 
     let lib = LibHeif::new();
     let ctx = HeifContext::read_from_file(
@@ -215,6 +221,33 @@ fn decode_heic_to_jpeg(src: &Path, quality: u8) -> Result<Vec<u8>> {
     let handle = ctx
         .primary_image_handle()
         .with_context(|| "image primaire")?;
+
+    // Profil ICC (Display P3 sur iPhone) : extrait depuis le handle source pour le
+    // reinjecter tel quel dans le JPG. Sans ca, les viewers JPG supposent sRGB et
+    // les couleurs paraissent ternes sur les photos large gamut.
+    let icc_profile = handle.color_profile_raw().map(|p| p.data);
+
+    // EXIF : le payload libheif est prefixe par un offset (4 octets BE) au TIFF header.
+    let exif = {
+        let count = handle.number_of_metadata_blocks(b"Exif");
+        if count > 0 {
+            let mut ids: Vec<ItemId> = vec![0; count as usize];
+            handle.metadata_block_ids(&mut ids, b"Exif");
+            ids.first().and_then(|&id| handle.metadata(id).ok()).and_then(|raw| {
+                if raw.len() < 4 {
+                    return None;
+                }
+                let offset = u32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]]) as usize;
+                let start = 4 + offset;
+                if start >= raw.len() {
+                    return None;
+                }
+                Some(raw[start..].to_vec())
+            })
+        } else {
+            None
+        }
+    };
 
     let img = lib
         .decode(&handle, ColorSpace::Rgb(RgbChroma::Rgb), None)
@@ -243,42 +276,17 @@ fn decode_heic_to_jpeg(src: &Path, quality: u8) -> Result<Vec<u8>> {
         buf
     };
 
-    let mut out = Vec::with_capacity(row_bytes * height as usize / 4);
-    let mut encoder = JpegEncoder::new_with_quality(&mut out, quality);
+    let mut jpeg_bytes = Vec::with_capacity(row_bytes * height as usize / 4);
+    let mut encoder = JpegEncoder::new_with_quality(&mut jpeg_bytes, quality);
     encoder
         .encode(&packed, width, height, ColorType::Rgb8.into())
         .with_context(|| "encodage JPEG")?;
 
-    Ok(out)
-}
-
-fn extract_exif(src: &Path) -> Result<Option<Vec<u8>>> {
-    use libheif_rs::{HeifContext, ItemId};
-
-    let ctx = HeifContext::read_from_file(src.to_str().ok_or_else(|| anyhow!("chemin non-UTF8"))?)?;
-    let handle = ctx.primary_image_handle()?;
-
-    let exif_tag = b"Exif";
-    let count = handle.number_of_metadata_blocks(exif_tag);
-    if count <= 0 {
-        return Ok(None);
-    }
-    let mut ids: Vec<ItemId> = vec![0; count as usize];
-    handle.metadata_block_ids(&mut ids, exif_tag);
-    let Some(&id) = ids.first() else {
-        return Ok(None);
-    };
-    let raw = handle.metadata(id)?;
-    // libheif préfixe l'EXIF par 4 octets d'offset au TIFF header.
-    if raw.len() < 4 {
-        return Ok(None);
-    }
-    let offset = u32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]]) as usize;
-    let start = 4 + offset;
-    if start >= raw.len() {
-        return Ok(None);
-    }
-    Ok(Some(raw[start..].to_vec()))
+    Ok(DecodedHeic {
+        jpeg_bytes,
+        icc_profile,
+        exif,
+    })
 }
 
 /// Parcourt l'IFD0 du blob EXIF (format TIFF) et remet le tag Orientation (0x0112)
@@ -348,13 +356,19 @@ fn neutralize_exif_orientation(exif: &mut [u8]) {
     }
 }
 
-fn inject_exif_into_jpeg(jpeg: &[u8], exif: &[u8]) -> Result<Vec<u8>> {
+fn finalize_jpeg(jpeg: &[u8], icc: Option<&[u8]>, exif: Option<&[u8]>) -> Result<Vec<u8>> {
     use img_parts::jpeg::Jpeg;
-    use img_parts::ImageEXIF;
+    use img_parts::{ImageEXIF, ImageICC};
 
     let mut img = Jpeg::from_bytes(jpeg.to_vec().into())?;
-    img.set_exif(Some(exif.to_vec().into()));
-    let mut out = Vec::with_capacity(jpeg.len() + exif.len() + 32);
+    if let Some(i) = icc {
+        img.set_icc_profile(Some(i.to_vec().into()));
+    }
+    if let Some(e) = exif {
+        img.set_exif(Some(e.to_vec().into()));
+    }
+    let cap = jpeg.len() + icc.map(|v| v.len()).unwrap_or(0) + exif.map(|v| v.len()).unwrap_or(0) + 64;
+    let mut out = Vec::with_capacity(cap);
     img.encoder().write_to(&mut out)?;
     Ok(out)
 }
