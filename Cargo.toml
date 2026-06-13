@@ -21,6 +21,9 @@ img-parts = "0.3"
 rayon = "1.10"
 indicatif = "0.17"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_Console"] }
+
 [profile.release]
 lto = true
 codegen-units = 1

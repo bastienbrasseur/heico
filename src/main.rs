@@ -1,3 +1,8 @@
+// En release on cible le subsystem "windows" pour qu'aucune fenetre console
+// ne flashe quand l'exe est appele depuis le menu contextuel de l'explorateur.
+// En debug on garde le subsystem "console" pour pouvoir voir les prints au dev.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -5,6 +10,20 @@ use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
+
+#[cfg(windows)]
+fn attach_parent_console() {
+    use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
+    // Si le binaire est invoque depuis un cmd/PowerShell, on rattache la console
+    // parent pour que les prints soient visibles. Si on est lance depuis l'explorateur
+    // (pas de console parent), AttachConsole echoue silencieusement et on reste muet.
+    unsafe {
+        let _ = AttachConsole(ATTACH_PARENT_PROCESS);
+    }
+}
+
+#[cfg(not(windows))]
+fn attach_parent_console() {}
 
 /// Convertit un ou plusieurs fichiers HEIC en JPG.
 #[derive(Parser, Debug)]
@@ -32,6 +51,7 @@ struct Cli {
 }
 
 fn main() {
+    attach_parent_console();
     let cli = Cli::parse();
 
     if cli.quality == 0 || cli.quality > 100 {
@@ -148,7 +168,13 @@ fn convert_one(
 
     let final_bytes = if keep_exif {
         match extract_exif(src) {
-            Ok(Some(exif)) => inject_exif_into_jpeg(&jpg_bytes, &exif).unwrap_or(jpg_bytes),
+            Ok(Some(mut exif)) => {
+                // libheif a deja applique la rotation EXIF sur les pixels au decodage,
+                // donc on neutralise le tag Orientation pour eviter qu'un viewer JPG
+                // ne rotate une seconde fois.
+                neutralize_exif_orientation(&mut exif);
+                inject_exif_into_jpeg(&jpg_bytes, &exif).unwrap_or(jpg_bytes)
+            }
             _ => jpg_bytes,
         }
     } else {
@@ -253,6 +279,73 @@ fn extract_exif(src: &Path) -> Result<Option<Vec<u8>>> {
         return Ok(None);
     }
     Ok(Some(raw[start..].to_vec()))
+}
+
+/// Parcourt l'IFD0 du blob EXIF (format TIFF) et remet le tag Orientation (0x0112)
+/// a la valeur 1 (Normal). Operation no-op si le blob n'est pas un TIFF valide ou
+/// si le tag est absent.
+fn neutralize_exif_orientation(exif: &mut [u8]) {
+    if exif.len() < 8 {
+        return;
+    }
+    let little_endian = match &exif[0..2] {
+        b"II" => true,
+        b"MM" => false,
+        _ => return,
+    };
+    let read_u16 = |buf: &[u8], off: usize| -> Option<u16> {
+        if off + 2 > buf.len() {
+            return None;
+        }
+        Some(if little_endian {
+            u16::from_le_bytes([buf[off], buf[off + 1]])
+        } else {
+            u16::from_be_bytes([buf[off], buf[off + 1]])
+        })
+    };
+    let read_u32 = |buf: &[u8], off: usize| -> Option<u32> {
+        if off + 4 > buf.len() {
+            return None;
+        }
+        Some(if little_endian {
+            u32::from_le_bytes([buf[off], buf[off + 1], buf[off + 2], buf[off + 3]])
+        } else {
+            u32::from_be_bytes([buf[off], buf[off + 1], buf[off + 2], buf[off + 3]])
+        })
+    };
+
+    if read_u16(exif, 2) != Some(42) {
+        return;
+    }
+    let Some(ifd0_offset) = read_u32(exif, 4) else {
+        return;
+    };
+    let ifd0_offset = ifd0_offset as usize;
+    let Some(entry_count) = read_u16(exif, ifd0_offset) else {
+        return;
+    };
+    let entries_start = ifd0_offset + 2;
+
+    for i in 0..(entry_count as usize) {
+        let entry_off = entries_start + i * 12;
+        if entry_off + 12 > exif.len() {
+            break;
+        }
+        let Some(tag) = read_u16(exif, entry_off) else {
+            break;
+        };
+        if tag == 0x0112 {
+            // Tag Orientation. Type SHORT (3), count 1, valeur inline a entry_off+8.
+            if little_endian {
+                exif[entry_off + 8] = 1;
+                exif[entry_off + 9] = 0;
+            } else {
+                exif[entry_off + 8] = 0;
+                exif[entry_off + 9] = 1;
+            }
+            return;
+        }
+    }
 }
 
 fn inject_exif_into_jpeg(jpeg: &[u8], exif: &[u8]) -> Result<Vec<u8>> {
