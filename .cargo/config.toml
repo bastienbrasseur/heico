@@ -1,0 +1,6 @@
+# libheif-sys utilise le crate `vcpkg` pour trouver libheif sur Windows.
+# Par defaut il cherche le triplet x64-windows-static-md (static).
+# On utilise des DLL dynamiques (x64-windows) pour build plus rapide,
+# le binaire final ships avec les DLL dans le meme dossier (cf installer/install.ps1).
+[env]
+VCPKGRS_DYNAMIC = "1"
