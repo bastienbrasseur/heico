@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  CARGO_TERM_COLOR: always
+  VCPKG_DEFAULT_TRIPLET: x64-windows
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish Windows binary
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup vcpkg + libheif
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 'master'
+
+      - name: Install libheif
+        run: vcpkg install libheif:x64-windows
+
+      - name: Build release
+        run: cargo build --release
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+
+      - name: Stage artifacts
+        run: |
+          mkdir dist
+          copy target\release\heico.exe dist\
+          copy vcpkg\installed\x64-windows\bin\libheif.dll dist\
+          copy vcpkg\installed\x64-windows\bin\libde265.dll dist\
+          copy vcpkg\installed\x64-windows\bin\libx265.dll dist\ 2>$null
+          copy vcpkg\installed\x64-windows\bin\aom.dll dist\ 2>$null
+          copy installer\install.ps1 dist\
+          copy installer\uninstall.ps1 dist\
+          copy README.md dist\
+          copy LICENSE dist\
+
+      - name: Zip artifacts
+        run: Compress-Archive -Path dist\* -DestinationPath heico-${{ github.ref_name }}-x64-windows.zip
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: heico-${{ github.ref_name }}-x64-windows.zip
+          generate_release_notes: true
