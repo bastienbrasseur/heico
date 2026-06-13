@@ -4,7 +4,7 @@
 
 $ErrorActionPreference = "Continue"
 
-foreach ($ext in @(".heic", ".HEIC", ".heif", ".HEIF")) {
+foreach ($ext in @(".heic", ".HEIC", ".heif", ".HEIF", ".png", ".PNG")) {
     $keyBase = "HKCU:\Software\Classes\SystemFileAssociations\$ext\shell\HeicoConvertToJpg"
     if (Test-Path $keyBase) {
         Remove-Item $keyBase -Recurse -Force

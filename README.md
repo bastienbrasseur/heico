@@ -1,12 +1,16 @@
 # Heico
 
-Convertisseur HEIC vers JPG pour Windows. Clic droit sur un fichier `.heic`, **Convertir en JPG**, voilà.
+Convertisseur HEIC / PNG vers JPG pour Windows. Clic droit sur le fichier, **Convertir en JPG**, voilà.
 
-Pensé pour les utilisateurs qui en ont marre des HEIC d'iPhone qui ne s'ouvrent nulle part sans payer une extension à Microsoft.
+Pensé pour deux cas concrets :
+- Les HEIC d'iPhone qui ne s'ouvrent nulle part sans payer une extension à Microsoft.
+- Les gros PNG full-détail générés par IA qu'on veut en JPG pour gagner 5x en poids.
 
+Features :
 - Conversion par clic droit dans l'explorateur Windows
 - Batch parallèle si tu sélectionnes plusieurs fichiers
-- Préserve l'EXIF (date de prise de vue, orientation, géoloc)
+- HEIC : préserve l'EXIF (date, orientation, géoloc) et le profil ICC (Display P3)
+- PNG : préserve l'ICC, composite transparence sur fond blanc
 - 100% offline, aucun service tiers, aucune télémétrie
 - Open source MIT
 
@@ -20,7 +24,7 @@ En attendant, build from source (section ci-dessous).
 
 ### Depuis l'explorateur Windows
 
-Clic droit sur un `.heic` → **Convertir en JPG** → un `.jpg` apparaît à côté.
+Clic droit sur un `.heic`, `.heif` ou `.png` → **Convertir en JPG** → un `.jpg` apparaît à côté.
 
 ### Depuis la ligne de commande
 

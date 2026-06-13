@@ -164,7 +164,16 @@ fn convert_one(
         return Ok(ConvertOutcome::Skipped(dst));
     }
 
-    let decoded = decode_heic(src, quality)?;
+    let ext = src
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_ascii_lowercase());
+    let decoded = match ext.as_deref() {
+        Some("heic") | Some("heif") => decode_heic(src, quality)?,
+        Some("png") => decode_png(src, quality)?,
+        Some(other) => return Err(anyhow!("format non supporté : .{other}")),
+        None => return Err(anyhow!("extension manquante")),
+    };
 
     let exif = if keep_exif {
         decoded.exif.map(|mut e| {
@@ -178,15 +187,19 @@ fn convert_one(
         None
     };
 
-    let final_bytes = finalize_jpeg(&decoded.jpeg_bytes, decoded.icc_profile.as_deref(), exif.as_deref())
-        .unwrap_or(decoded.jpeg_bytes);
+    let final_bytes = finalize_jpeg(
+        &decoded.jpeg_bytes,
+        decoded.icc_profile.as_deref(),
+        exif.as_deref(),
+    )
+    .unwrap_or(decoded.jpeg_bytes);
 
     std::fs::write(&dst, final_bytes).with_context(|| format!("écriture de {}", dst.display()))?;
 
     Ok(ConvertOutcome::Converted(dst))
 }
 
-struct DecodedHeic {
+struct DecodedSrc {
     jpeg_bytes: Vec<u8>,
     icc_profile: Option<Vec<u8>>,
     exif: Option<Vec<u8>>,
@@ -208,7 +221,7 @@ fn compute_destination(src: &Path, output_dir: Option<&Path>) -> Result<PathBuf>
     Ok(dst)
 }
 
-fn decode_heic(src: &Path, quality: u8) -> Result<DecodedHeic> {
+fn decode_heic(src: &Path, quality: u8) -> Result<DecodedSrc> {
     use image::{codecs::jpeg::JpegEncoder, ColorType};
     use libheif_rs::{ColorSpace, HeifContext, ItemId, LibHeif, RgbChroma};
 
@@ -233,17 +246,19 @@ fn decode_heic(src: &Path, quality: u8) -> Result<DecodedHeic> {
         if count > 0 {
             let mut ids: Vec<ItemId> = vec![0; count as usize];
             handle.metadata_block_ids(&mut ids, b"Exif");
-            ids.first().and_then(|&id| handle.metadata(id).ok()).and_then(|raw| {
-                if raw.len() < 4 {
-                    return None;
-                }
-                let offset = u32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]]) as usize;
-                let start = 4 + offset;
-                if start >= raw.len() {
-                    return None;
-                }
-                Some(raw[start..].to_vec())
-            })
+            ids.first()
+                .and_then(|&id| handle.metadata(id).ok())
+                .and_then(|raw| {
+                    if raw.len() < 4 {
+                        return None;
+                    }
+                    let offset = u32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]]) as usize;
+                    let start = 4 + offset;
+                    if start >= raw.len() {
+                        return None;
+                    }
+                    Some(raw[start..].to_vec())
+                })
         } else {
             None
         }
@@ -282,11 +297,81 @@ fn decode_heic(src: &Path, quality: u8) -> Result<DecodedHeic> {
         .encode(&packed, width, height, ColorType::Rgb8.into())
         .with_context(|| "encodage JPEG")?;
 
-    Ok(DecodedHeic {
+    Ok(DecodedSrc {
         jpeg_bytes,
         icc_profile,
         exif,
     })
+}
+
+fn decode_png(src: &Path, quality: u8) -> Result<DecodedSrc> {
+    use image::codecs::jpeg::JpegEncoder;
+    use image::codecs::png::PngDecoder;
+    use image::{ColorType, DynamicImage, ImageDecoder};
+    use std::io::BufReader;
+
+    let file = std::fs::File::open(src).with_context(|| "ouverture PNG")?;
+    let mut decoder = PngDecoder::new(BufReader::new(file)).with_context(|| "décodage PNG")?;
+
+    let icc_profile = decoder.icc_profile().ok().flatten();
+
+    let img = DynamicImage::from_decoder(decoder).with_context(|| "lecture pixels PNG")?;
+    let (width, height) = (img.width(), img.height());
+
+    // JPG ne supporte pas la transparence : composite RGBA sur fond blanc.
+    let rgb_bytes: Vec<u8> = match img {
+        DynamicImage::ImageRgb8(buf) => buf.into_raw(),
+        DynamicImage::ImageRgba8(buf) => composite_rgba_on_white(buf.as_raw(), width, height),
+        DynamicImage::ImageLuma8(buf) => {
+            let mut out = Vec::with_capacity(buf.len() * 3);
+            for px in buf.iter() {
+                out.extend_from_slice(&[*px, *px, *px]);
+            }
+            out
+        }
+        DynamicImage::ImageLumaA8(buf) => {
+            let mut out = Vec::with_capacity((buf.len() / 2) * 3);
+            let raw = buf.into_raw();
+            for chunk in raw.chunks_exact(2) {
+                let (l, a) = (chunk[0] as u16, chunk[1] as u16);
+                let inv = 255 - a;
+                let v = ((l * a + 255 * inv) / 255) as u8;
+                out.extend_from_slice(&[v, v, v]);
+            }
+            out
+        }
+        other => other.to_rgb8().into_raw(),
+    };
+
+    let mut jpeg_bytes = Vec::with_capacity(rgb_bytes.len() / 4);
+    let mut encoder = JpegEncoder::new_with_quality(&mut jpeg_bytes, quality);
+    encoder
+        .encode(&rgb_bytes, width, height, ColorType::Rgb8.into())
+        .with_context(|| "encodage JPEG")?;
+
+    Ok(DecodedSrc {
+        jpeg_bytes,
+        icc_profile,
+        exif: None,
+    })
+}
+
+fn composite_rgba_on_white(rgba: &[u8], width: u32, height: u32) -> Vec<u8> {
+    let pixels = (width as usize) * (height as usize);
+    let mut out = Vec::with_capacity(pixels * 3);
+    for chunk in rgba.chunks_exact(4) {
+        let (r, g, b, a) = (
+            chunk[0] as u16,
+            chunk[1] as u16,
+            chunk[2] as u16,
+            chunk[3] as u16,
+        );
+        let inv = 255 - a;
+        out.push(((r * a + 255 * inv) / 255) as u8);
+        out.push(((g * a + 255 * inv) / 255) as u8);
+        out.push(((b * a + 255 * inv) / 255) as u8);
+    }
+    out
 }
 
 /// Parcourt l'IFD0 du blob EXIF (format TIFF) et remet le tag Orientation (0x0112)
@@ -367,7 +452,8 @@ fn finalize_jpeg(jpeg: &[u8], icc: Option<&[u8]>, exif: Option<&[u8]>) -> Result
     if let Some(e) = exif {
         img.set_exif(Some(e.to_vec().into()));
     }
-    let cap = jpeg.len() + icc.map(|v| v.len()).unwrap_or(0) + exif.map(|v| v.len()).unwrap_or(0) + 64;
+    let cap =
+        jpeg.len() + icc.map(|v| v.len()).unwrap_or(0) + exif.map(|v| v.len()).unwrap_or(0) + 64;
     let mut out = Vec::with_capacity(cap);
     img.encoder().write_to(&mut out)?;
     Ok(out)
