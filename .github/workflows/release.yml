@@ -23,32 +23,30 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Setup vcpkg + libheif
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgGitCommitId: 'master'
-
-      - name: Install libheif + dav1d
-        run: vcpkg install libheif:x64-windows dav1d:x64-windows
+      - name: Install libheif + dav1d (vcpkg preinstalled on runner)
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install libheif:x64-windows dav1d:x64-windows
 
       - name: Install pkg-config
         run: choco install -y pkgconfiglite
 
       - name: Build release
-        run: cargo build --release
-        env:
-          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
-          PKG_CONFIG_PATH: ${{ github.workspace }}/vcpkg/installed/x64-windows/lib/pkgconfig
+        shell: pwsh
+        run: |
+          $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
+          $env:PKG_CONFIG_PATH = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib\pkgconfig"
+          cargo build --release
 
       - name: Stage artifacts
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path dist | Out-Null
           Copy-Item target\release\heico.exe dist\
-          Copy-Item vcpkg\installed\x64-windows\bin\heif.dll dist\
-          Copy-Item vcpkg\installed\x64-windows\bin\libde265.dll dist\
-          Copy-Item vcpkg\installed\x64-windows\bin\libx265.dll dist\ -ErrorAction SilentlyContinue
-          Copy-Item vcpkg\installed\x64-windows\bin\dav1d.dll dist\
+          Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\heif.dll" dist\
+          Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\libde265.dll" dist\
+          Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\libx265.dll" dist\ -ErrorAction SilentlyContinue
+          Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\dav1d.dll" dist\
           Copy-Item installer\install.ps1 dist\
           Copy-Item installer\uninstall.ps1 dist\
           Copy-Item README.md dist\

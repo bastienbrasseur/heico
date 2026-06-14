@@ -33,13 +33,10 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      - name: Setup vcpkg + libheif
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgGitCommitId: 'master'
-
-      - name: Install libheif + dav1d
-        run: vcpkg install libheif:x64-windows dav1d:x64-windows
+      - name: Install libheif + dav1d (vcpkg preinstalled on runner)
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install libheif:x64-windows dav1d:x64-windows
 
       - name: Install pkg-config
         run: choco install -y pkgconfiglite
@@ -48,13 +45,15 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: cargo clippy
-        run: cargo clippy --release -- -D warnings
-        env:
-          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
-          PKG_CONFIG_PATH: ${{ github.workspace }}/vcpkg/installed/x64-windows/lib/pkgconfig
+        shell: pwsh
+        run: |
+          $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
+          $env:PKG_CONFIG_PATH = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib\pkgconfig"
+          cargo clippy --release -- -D warnings
 
       - name: cargo build
-        run: cargo build --release
-        env:
-          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
-          PKG_CONFIG_PATH: ${{ github.workspace }}/vcpkg/installed/x64-windows/lib/pkgconfig
+        shell: pwsh
+        run: |
+          $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
+          $env:PKG_CONFIG_PATH = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib\pkgconfig"
+          cargo build --release
