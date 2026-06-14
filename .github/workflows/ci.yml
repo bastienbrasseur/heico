@@ -37,7 +37,6 @@ jobs:
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgGitCommitId: 'master'
-          runVcpkgInstall: true
 
       - name: Install libheif + dav1d
         run: vcpkg install libheif:x64-windows dav1d:x64-windows
