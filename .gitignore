@@ -18,6 +18,7 @@ Thumbs.db
 
 # Claude Code local state (par machine)
 .claude/
+CLAUDE.md
 
 # Test fixtures lourdes
 /samples

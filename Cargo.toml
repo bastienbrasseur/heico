@@ -5,7 +5,7 @@ edition = "2021"
 description = "Convertisseur HEIC vers JPG simple, rapide, avec menu contextuel Windows"
 license = "MIT"
 repository = "https://github.com/bastienbrasseur/heico"
-authors = ["Bastien Brasseur <bastien.brasseur@gmail.com>"]
+authors = ["Bastien Brasseur"]
 readme = "README.md"
 
 [[bin]]
