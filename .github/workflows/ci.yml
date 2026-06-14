@@ -47,6 +47,7 @@ jobs:
       - name: cargo clippy
         shell: pwsh
         run: |
+          $env:PATH = "C:\ProgramData\chocolatey\bin;$env:PATH"
           $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
           $env:PKG_CONFIG_PATH = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib\pkgconfig"
           cargo clippy --release -- -D warnings
@@ -54,6 +55,7 @@ jobs:
       - name: cargo build
         shell: pwsh
         run: |
+          $env:PATH = "C:\ProgramData\chocolatey\bin;$env:PATH"
           $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
           $env:PKG_CONFIG_PATH = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib\pkgconfig"
           cargo build --release

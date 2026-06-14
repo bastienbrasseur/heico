@@ -34,6 +34,9 @@ jobs:
       - name: Build release
         shell: pwsh
         run: |
+          # Force le PATH chocolatey pour que pkg-config (utilise par dav1d-sys)
+          # soit visible meme si le runner n'a pas rafraichi le PATH apres choco install.
+          $env:PATH = "C:\ProgramData\chocolatey\bin;$env:PATH"
           $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
           $env:PKG_CONFIG_PATH = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib\pkgconfig"
           cargo build --release
