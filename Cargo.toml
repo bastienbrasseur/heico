@@ -1,6 +1,6 @@
 [package]
 name = "heico"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Convertisseur HEIC vers JPG simple, rapide, avec menu contextuel Windows"
 license = "MIT"
