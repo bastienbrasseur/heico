@@ -7,12 +7,31 @@
 
 $ErrorActionPreference = "Stop"
 
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$exeSource = Join-Path $scriptDir "..\target\release\heico.exe"
+# Pause systematique a la fin (succes ou erreur) pour que la fenetre ne se
+# ferme pas avant que l'utilisateur ait lu le resultat, notamment quand
+# install.ps1 est lance via clic droit > Executer avec PowerShell.
+trap {
+    Write-Host ""
+    Write-Host "Erreur : $_" -ForegroundColor Red
+    Read-Host "Appuie sur Entree pour fermer"
+    exit 1
+}
 
-if (-not (Test-Path $exeSource)) {
-    Write-Host "heico.exe introuvable a $exeSource" -ForegroundColor Red
-    Write-Host "Lance d'abord : cargo build --release" -ForegroundColor Yellow
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+
+# Cherche heico.exe d'abord cote-a-cote (layout du zip de release),
+# puis dans ..\target\release\ (layout de dev cargo build).
+$candidateExePaths = @(
+    (Join-Path $scriptDir "heico.exe"),
+    (Join-Path $scriptDir "..\target\release\heico.exe")
+)
+$exeSource = $candidateExePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+if (-not $exeSource) {
+    Write-Host "heico.exe introuvable. Cherche aux emplacements :" -ForegroundColor Red
+    foreach ($p in $candidateExePaths) { Write-Host "  - $p" -ForegroundColor DarkGray }
+    Write-Host "Si tu as telecharge le zip de release, lance install.ps1 depuis le dossier dezippe (pas un raccourci ailleurs)." -ForegroundColor Yellow
+    Read-Host "Appuie sur Entree pour fermer"
     exit 1
 }
 
@@ -81,3 +100,5 @@ Write-Host ""
 Write-Host "Installation terminee." -ForegroundColor Green
 Write-Host "Clic droit sur un .heic / .heif / .png / .webp / .tif / .bmp / .gif / .avif pour utiliser." -ForegroundColor Cyan
 Write-Host "(Si tu ne le vois pas, essaie 'Afficher plus d'options'.)" -ForegroundColor DarkGray
+Write-Host ""
+Read-Host "Appuie sur Entree pour fermer"

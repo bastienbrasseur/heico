@@ -29,3 +29,5 @@ if (Test-Path $installDir) {
 
 Write-Host ""
 Write-Host "Desinstallation terminee." -ForegroundColor Cyan
+Write-Host ""
+Read-Host "Appuie sur Entree pour fermer"
