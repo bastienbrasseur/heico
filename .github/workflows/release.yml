@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   release:
-    name: Build and publish Windows binary
+    name: Build and publish Windows installer
     runs-on: windows-latest
 
     steps:
@@ -23,45 +23,41 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install libheif + dav1d (vcpkg preinstalled on runner)
+      - name: Install libheif + dav1d
         shell: pwsh
         run: |
           & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install libheif:x64-windows dav1d:x64-windows
 
-      - name: Install pkg-config
-        run: choco install -y pkgconfiglite
+      - name: Install pkg-config + Inno Setup
+        run: choco install -y pkgconfiglite innosetup
 
       - name: Build release
         shell: pwsh
         run: |
-          # Force le PATH chocolatey pour que pkg-config (utilise par dav1d-sys)
-          # soit visible meme si le runner n'a pas rafraichi le PATH apres choco install.
+          # pkg-config (dav1d-sys) introuvable sans refresh PATH apres choco.
           $env:PATH = "C:\ProgramData\chocolatey\bin;$env:PATH"
           $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
           $env:PKG_CONFIG_PATH = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib\pkgconfig"
           cargo build --release
 
-      - name: Stage artifacts
+      - name: Stage installer inputs
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path dist | Out-Null
-          Copy-Item target\release\heico.exe dist\
-          Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\heif.dll" dist\
-          Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\libde265.dll" dist\
-          Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\libx265.dll" dist\ -ErrorAction SilentlyContinue
-          Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\dav1d.dll" dist\
-          Copy-Item installer\install.ps1 dist\
-          Copy-Item installer\install.bat dist\
-          Copy-Item installer\uninstall.ps1 dist\
-          Copy-Item installer\uninstall.bat dist\
-          Copy-Item README.md dist\
-          Copy-Item LICENSE dist\
+          New-Item -ItemType Directory -Path installer\build | Out-Null
+          Copy-Item target\release\heico.exe installer\build\
+          Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\heif.dll" installer\build\
+          Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\libde265.dll" installer\build\
+          Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\libx265.dll" installer\build\ -ErrorAction SilentlyContinue
+          Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\dav1d.dll" installer\build\
 
-      - name: Zip artifacts
-        run: Compress-Archive -Path dist\* -DestinationPath heico-${{ github.ref_name }}-x64-windows.zip
+      - name: Compile installer with Inno Setup
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v',''
+          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" /DMyAppVersion=$version installer\heico.iss
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: heico-${{ github.ref_name }}-x64-windows.zip
+          files: installer/Output/HeicoSetup-*.exe
           generate_release_notes: true

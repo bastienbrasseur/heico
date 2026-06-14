@@ -25,3 +25,7 @@ NICE-TO-HAVE.md
 
 # Test fixtures lourdes
 /samples
+
+# Installer build artefacts
+/installer/build
+/installer/Output

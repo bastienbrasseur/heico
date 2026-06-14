@@ -31,13 +31,10 @@ Heico est une seule action : clic droit, **Convertir en JPG**. Rien à apprendre
 
 ## Installation
 
-1. Télécharge le dernier zip sur la page [Releases](https://github.com/bastienbrasseur/heico/releases).
-2. Dézippe où tu veux (par exemple `C:\Tools\heico\`).
-3. Double-clique **`install.bat`**. Aucun droit administrateur requis.
+1. Télécharge **`HeicoSetup-x.y.z.exe`** depuis la page [Releases](https://github.com/bastienbrasseur/heico/releases).
+2. Double-clique le fichier, suis l'assistant, c'est fini.
 
-L'installeur copie `heico.exe` + les DLL natives dans `%LOCALAPPDATA%\Heico\` et ajoute l'entrée **Convertir en JPG** au menu contextuel pour l'utilisateur courant.
-
-> `install.bat` est juste un wrapper autour de `install.ps1` qui contourne la politique d'exécution restrictive de PowerShell par défaut. Si tu préfères lancer le `.ps1` directement, c'est possible (clic droit → **Exécuter avec PowerShell**), mais sur un Windows fraîchement installé la politique bloque souvent les scripts téléchargés.
+Aucun droit administrateur requis. L'installeur copie `heico.exe` + les DLL natives dans `%LOCALAPPDATA%\Heico\` et ajoute l'entrée **Convertir en JPG** au menu contextuel pour l'utilisateur courant. Pour désinstaller, passe par **Applications et fonctionnalités** dans les paramètres Windows.
 
 Pour build toi-même depuis les sources, voir plus bas.
 
@@ -88,7 +85,7 @@ Sur un laptop standard (CPU 8 cœurs, SSD NVMe), conversion d'un dossier de 100 
 Sur Windows 11, le clic droit affiche d'abord un menu réduit. Clique sur **Afficher plus d'options** (ou fais `Shift + clic droit`) pour voir l'entrée Heico. Le menu Windows 11 "moderne" ne supporte que les entrées packagées MSIX, pas les clés registre classiques.
 
 **Erreur "DLL manquante : heif.dll" (ou libde265 / dav1d / libx265).**
-Relance `install.ps1` depuis le zip téléchargé. Si tu as build toi-même, vérifie que les DLL vcpkg ont bien été copiées dans `%LOCALAPPDATA%\Heico\`.
+Relance `HeicoSetup-x.y.z.exe`. Si tu as build toi-même, vérifie que les DLL vcpkg ont bien été copiées dans `%LOCALAPPDATA%\Heico\`.
 
 **Windows SmartScreen bloque l'exe au premier lancement.**
 Le binaire n'est pas signé (signature de code = ~300 €/an, pas justifié pour un outil gratuit). Clique sur **Informations complémentaires** puis **Exécuter quand même**. Tu peux aussi inspecter le code source de ce repo et build toi-même si tu préfères.
@@ -126,11 +123,19 @@ cargo build --release
 
 Le binaire est dans `target\release\heico.exe`.
 
+Pour générer l'installeur en local : copier `heico.exe` + les 4 DLL (`heif.dll`, `libde265.dll`, `libx265.dll`, `dav1d.dll`) dans `installer\build\`, installer Inno Setup (`winget install JRSoftware.InnoSetup`), puis lancer :
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\iscc.exe" /DMyAppVersion=0.1.3 installer\heico.iss
+```
+
+Le `.exe` apparaît dans `installer\Output\`.
+
 ## Désinstallation
 
-Double-clique **`uninstall.bat`** depuis le dossier dézippé.
+Passe par **Paramètres Windows → Applications → Applications installées**, cherche **Heico**, clique sur **Désinstaller**.
 
-Retire la clé registre du menu contextuel et supprime `%LOCALAPPDATA%\Heico\`.
+L'installeur retire la clé registre du menu contextuel et supprime `%LOCALAPPDATA%\Heico\`.
 
 ## Licence
 
