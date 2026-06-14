@@ -67,6 +67,10 @@ foreach ($ext in $supportedExts) {
     New-Item -Path $keyBase -Force | Out-Null
     Set-ItemProperty -Path $keyBase -Name "(Default)" -Value "Convertir en JPG"
     Set-ItemProperty -Path $keyBase -Name "Icon" -Value "`"$exeDest`",0"
+    # MultiSelectModel=Player : appelle heico une seule fois avec tous les
+    # fichiers en arguments, au lieu d'un processus par fichier. Sans ca,
+    # Windows masque l'entree au-dela de ~15 fichiers selectionnes.
+    Set-ItemProperty -Path $keyBase -Name "MultiSelectModel" -Value "Player"
 
     $cmdKey = "$keyBase\command"
     New-Item -Path $cmdKey -Force | Out-Null
