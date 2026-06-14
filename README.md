@@ -33,9 +33,11 @@ Heico est une seule action : clic droit, **Convertir en JPG**. Rien à apprendre
 
 1. Télécharge le dernier zip sur la page [Releases](https://github.com/bastienbrasseur/heico/releases).
 2. Dézippe où tu veux (par exemple `C:\Tools\heico\`).
-3. Lance `install.ps1` une fois (clic droit → **Exécuter avec PowerShell**, aucun droit admin requis).
+3. Double-clique **`install.bat`**. Aucun droit administrateur requis.
 
 L'installeur copie `heico.exe` + les DLL natives dans `%LOCALAPPDATA%\Heico\` et ajoute l'entrée **Convertir en JPG** au menu contextuel pour l'utilisateur courant.
+
+> `install.bat` est juste un wrapper autour de `install.ps1` qui contourne la politique d'exécution restrictive de PowerShell par défaut. Si tu préfères lancer le `.ps1` directement, c'est possible (clic droit → **Exécuter avec PowerShell**), mais sur un Windows fraîchement installé la politique bloque souvent les scripts téléchargés.
 
 Pour build toi-même depuis les sources, voir plus bas.
 
@@ -126,9 +128,7 @@ Le binaire est dans `target\release\heico.exe`.
 
 ## Désinstallation
 
-```powershell
-.\installer\uninstall.ps1
-```
+Double-clique **`uninstall.bat`** depuis le dossier dézippé.
 
 Retire la clé registre du menu contextuel et supprime `%LOCALAPPDATA%\Heico\`.
 
