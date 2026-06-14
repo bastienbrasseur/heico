@@ -1,5 +1,7 @@
 # Heico
 
+[![CI](https://github.com/bastienbrasseur/heico/actions/workflows/ci.yml/badge.svg)](https://github.com/bastienbrasseur/heico/actions/workflows/ci.yml)
+
 Convertisseur image vers JPG pour Windows. Clic droit sur le fichier, **Convertir en JPG**, voilà.
 
 Formats supportés en entrée : **HEIC, HEIF, PNG, WebP, TIFF, BMP, GIF, AVIF**.
