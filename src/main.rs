@@ -5,25 +5,27 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 
+mod notify;
+
+// true = console parent attachee (mode CLI, eprintln visible), false = lance
+// depuis l'explorateur (subsystem windows, eprintln dans le vide -> toast).
 #[cfg(windows)]
-fn attach_parent_console() {
+fn attach_parent_console() -> bool {
     use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
-    // Si le binaire est invoque depuis un cmd/PowerShell, on rattache la console
-    // parent pour que les prints soient visibles. Si on est lance depuis l'explorateur
-    // (pas de console parent), AttachConsole echoue silencieusement et on reste muet.
-    unsafe {
-        let _ = AttachConsole(ATTACH_PARENT_PROCESS);
-    }
+    unsafe { AttachConsole(ATTACH_PARENT_PROCESS) != 0 }
 }
 
 #[cfg(not(windows))]
-fn attach_parent_console() {}
+fn attach_parent_console() -> bool {
+    true
+}
 
 /// Convertit un ou plusieurs fichiers HEIC en JPG.
 #[derive(Parser, Debug)]
@@ -51,7 +53,7 @@ struct Cli {
 }
 
 fn main() {
-    attach_parent_console();
+    let console_attached = attach_parent_console();
     let cli = Cli::parse();
 
     if cli.quality == 0 || cli.quality > 100 {
@@ -84,6 +86,9 @@ fn main() {
     let success = AtomicUsize::new(0);
     let skipped = AtomicUsize::new(0);
     let failed = AtomicUsize::new(0);
+    // Premier message d'erreur capture pour le toast en mode explorateur. On garde
+    // aussi le nom du fichier source associe pour le contexte utilisateur.
+    let first_err: Mutex<Option<String>> = Mutex::new(None);
 
     cli.files.par_iter().for_each(|src| {
         let result = convert_one(
@@ -121,7 +126,13 @@ fn main() {
                     pb.set_message(format!("ERR {}", src.display()));
                     pb.inc(1);
                 }
+                let fname = src.file_name().and_then(|n| n.to_str()).unwrap_or("?");
+                let msg = format!("{fname} : {e:#}");
                 eprintln!("Erreur sur {} : {e:#}", src.display());
+                let mut slot = first_err.lock().unwrap();
+                if slot.is_none() {
+                    *slot = Some(msg);
+                }
             }
         }
     });
@@ -138,6 +149,13 @@ fn main() {
     }
 
     if er > 0 {
+        // En mode explorateur (subsystem windows, pas de console parent), eprintln!
+        // part dans le vide. Un toast Windows est la seule chance pour l'utilisateur
+        // de voir qu'un fichier a echoue. En mode CLI, on s'abstient (eprintln suffit).
+        if !console_attached {
+            let first = first_err.lock().unwrap().take();
+            notify::show_error_summary(er, total, first.as_deref());
+        }
         std::process::exit(1);
     }
 }

@@ -69,7 +69,7 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   i: Integer;
-  KeyBase, CmdKey, ExeQ: string;
+  KeyBase, CmdKey, ExeQ, AumidKey: string;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -85,6 +85,12 @@ begin
       RegWriteStringValue(HKEY_CURRENT_USER, KeyBase, 'MultiSelectModel', 'Player');
       RegWriteStringValue(HKEY_CURRENT_USER, CmdKey, '', '"' + ExeQ + '" "%1"');
     end;
+    // AUMID Windows pour que les toasts d'erreur s'affichent avec le nom et l'icone
+    // de Heico, plutot qu'avec le fallback generique PowerShell utilise par defaut
+    // par tauri-winrt-notification.
+    AumidKey := 'Software\Classes\AppUserModelId\Apptic.Heico';
+    RegWriteStringValue(HKEY_CURRENT_USER, AumidKey, 'DisplayName', 'Heico');
+    RegWriteStringValue(HKEY_CURRENT_USER, AumidKey, 'IconUri', ExeQ);
   end;
 end;
 
@@ -101,5 +107,6 @@ begin
       KeyBase := 'Software\Classes\SystemFileAssociations\.' + Exts[i] + '\shell\HeicoConvertToJpg';
       RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, KeyBase);
     end;
+    RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\Classes\AppUserModelId\Apptic.Heico');
   end;
 end;
